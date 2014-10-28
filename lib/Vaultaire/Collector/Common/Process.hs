@@ -17,13 +17,12 @@ import           Vaultaire.Types
 import           Vaultaire.Collector.Common.Types
 
 runCollector :: MonadIO m
-             => m (Parser o, String, String)
+             => o
              -> (CollectorOpts o -> m s)
              -> Collector o s m FourTuple
              -> m ()
-runCollector parseExtraOpts initialiseExtraState collectFourTuple = do
-    (parseExtraOpts', desc, hdr) <- parseExtraOpts
-    (cOpts, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts') (fullDesc <> progDesc desc <> header hdr))
+runCollector eOpts initialiseExtraState collectFourTuple = do
+    cOpts <- liftIO $ execParser (info parseCommonOpts fullDesc)
     let opts = (cOpts, eOpts)
     eState <- initialiseExtraState opts
     cState <- getInitialCommonState cOpts
