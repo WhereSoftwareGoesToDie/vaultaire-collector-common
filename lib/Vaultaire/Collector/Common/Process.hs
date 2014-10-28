@@ -6,6 +6,7 @@
 module Vaultaire.Collector.Common.Process where
 
 import           Control.Monad
+import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Control.Monad.State
 import qualified Data.ByteString as BS
@@ -45,20 +46,20 @@ runCollector = do
 
 parseCommonOpts :: Parser CommonOpts
 parseCommonOpts = CommonOpts
-    <$> (read <$> strOption
-        (long "log-verbosity"
+    <$> flag LevelWarn LevelDebug
+        (long "verbose"
          <> short 'v'
-         <> help "Verbosity level at which to write log output"))
+         <> help "Run in verbose mode")
     <*> strOption
         (long "marquise-namespace"
          <> short 'n'
          <> value "perfdata"
          <> metavar "MARQUISE-NAMESPACE"
-         <> help "Marquise namespace to write to. Must be unique on a host basis.")
+         <> help "Marquise namespace to write to. Must be unique on a per-host basis.")
     <*> strOption
         (long "cache-file"
          <> short 'c'
-         <> value "/var/cache/marquise-cache/"
+         <> value "/var/cache/collector-cache"
          <> metavar "CACHE-FILE"
          <> help "Filepath to cache file to use. Created if non-existant.")
 
