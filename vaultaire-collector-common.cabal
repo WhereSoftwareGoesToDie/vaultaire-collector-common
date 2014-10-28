@@ -30,8 +30,7 @@ library
                        vaultaire-common,
                        bytestring,
                        text,
-                       optparse-applicative >= 0.11.0,
-                       vaultaire-query
+                       optparse-applicative >= 0.11.0
   hs-source-dirs:      lib
   default-language:    Haskell2010
 
