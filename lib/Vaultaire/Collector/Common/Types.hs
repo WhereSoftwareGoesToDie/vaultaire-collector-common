@@ -23,7 +23,6 @@ import           Vaultaire.Types
 data CommonOpts = CommonOpts
   { optLogLevel  :: LogLevel
   , optNamespace :: String
-  , optCacheFile :: String
   }
 
 data CommonState = CommonState
