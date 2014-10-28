@@ -17,8 +17,7 @@ build-type:          Simple
 cabal-version:       >=1.20
 
 library
-  exposed-modules:     Vaultaire.Collector.Common.Classes
-                       Vaultaire.Collector.Common.Process
+  exposed-modules:     Vaultaire.Collector.Common.Process
                        Vaultaire.Collector.Common.Types
   -- other-modules:       
   -- other-extensions:    

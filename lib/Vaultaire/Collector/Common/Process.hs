@@ -16,11 +16,14 @@ import           System.IO
 import           Marquise.Client
 import           Vaultaire.Types
 
-import           Vaultaire.Collector.Common.Classes
 import           Vaultaire.Collector.Common.Types
 
-runCollector :: (MonadIO m, CollectorMonad o s m) => m ()
-runCollector = do
+runCollector :: MonadIO m
+             => m (Parser o, String, String)
+             -> (CollectorOpts o -> m s)
+             -> Collector o s m FourTuple
+             -> m ()
+runCollector parseExtraOpts initialiseExtraState collectFourTuple = do
     (parseExtraOpts', desc, hdr) <- parseExtraOpts
     (cOpts, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts') (fullDesc <> progDesc desc <> header hdr))
     let opts = (cOpts, eOpts)
@@ -29,7 +32,6 @@ runCollector = do
   where
     setup = setSpoolFiles >> setInitialCache
     cleanup = writeCache
-    act :: (MonadIO m, CollectorMonad o s m) => Collector o s m ()
     act = forever $ do
         (addr, sd, ts, payload) <- collectFourTuple
         (cS@CommonState{..}, eS) <- get
@@ -64,13 +66,13 @@ parseCommonOpts = CommonOpts
          <> help "Filepath to cache file to use. Created if non-existant.")
 
 --- | Writes out the final state of the cache to the hash file
-writeCache :: (MonadIO m, CollectorMonad o s m) => Collector o s m ()
+writeCache :: MonadIO m => Collector o s m ()
 writeCache = do
     (CommonOpts{..}, _)  <- ask
     (CommonState{..}, _) <- get
     liftIO $ withFile optCacheFile WriteMode (`BS.hPut` toWire collectorCache)
 
-setSpoolFiles :: (MonadIO m, CollectorMonad o s m) => Collector o s m ()
+setSpoolFiles :: MonadIO m => Collector o s m ()
 setSpoolFiles = do
     (CommonOpts{..}, _) <- ask
     (cState@CommonState{..}, eState) <- get
@@ -83,7 +85,7 @@ setSpoolFiles = do
 
 --- | Attempts to generate an initial cache of SourceDicts from the given file path
 --- If the file does not exist, or is improperly formatted returns an empty cache
-setInitialCache :: (MonadIO m, CollectorMonad o s m) => Collector o s m ()
+setInitialCache :: MonadIO m => Collector o s m ()
 setInitialCache = do
     (CommonOpts{..}, _) <- ask
     (cState, eState) <- get
