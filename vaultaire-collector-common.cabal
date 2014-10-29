@@ -2,7 +2,7 @@
 -- further documentation, see http://haskell.org/cabal/users-guide/
 
 name:                vaultaire-collector-common
-version:             0.0.1
+version:             0.0.2
 synopsis:            Common base for Haskell vaultaire collectors
 -- description:         
 homepage:            https://github.com/anchor/vaultaire-collector-common
@@ -23,8 +23,7 @@ library
   -- other-extensions:    
   build-depends:       base >=4.7 && <4.8,
                        mtl,
-                       monad-logger,
-                       fast-logger,
+                       hslogger,
                        marquise,
                        vaultaire-common,
                        bytestring,
