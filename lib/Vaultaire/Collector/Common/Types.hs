@@ -8,7 +8,6 @@ module Vaultaire.Collector.Common.Types where
 import           Control.Applicative
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.Word
 import           System.Log.Logger
 
 import           Marquise.Client
@@ -27,8 +26,6 @@ data CommonState = CommonState
 type CollectorOpts o = (CommonOpts, o)
 
 type CollectorState s = (CommonState, s)
-
-type FourTuple = (Address, SourceDict, TimeStamp, Word64)
 
 newtype Collector o s m a = Collector {
     unCollector :: ReaderT (CollectorOpts o) (StateT (CollectorState s) m) a
