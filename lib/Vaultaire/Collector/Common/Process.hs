@@ -17,6 +17,11 @@ import           Vaultaire.Types
 
 import           Vaultaire.Collector.Common.Types
 
+runBaseCollector :: MonadIO m
+                 => Producer (Address, Either SourceDict SimplePoint) (Collector () () m) ()
+                 -> m ()
+runBaseCollector = runCollector () (\_ -> return ())
+
 runCollector :: MonadIO m
              => o
              -> (CollectorOpts o -> m s)
@@ -55,15 +60,16 @@ runCollector eOpts initialiseExtraState collect = do
         let cache = collectorCache
         unless (memberSourceCache hash cache) $ do
             let newCache = insertSourceCache hash collectorCache
-            liftIO $ withMarquiseHandler (\e -> warningM "Process.handleSource" $  "Marquise error when queuing sd update: " ++ show e)
-                (queueSourceDictUpdate collectorSpoolFiles addr sd)
+            liftIO $ withMarquiseHandler (\e -> warningM "Process.handleSource" $  "Marquise error when queuing sd update: " ++ show e) $ do
+                queueSourceDictUpdate collectorSpoolFiles addr sd
+                lift $ debugM "Process.handleSource" $ concat ["Queued sd ", show sd, " to addr ", show addr]
             put (cS{collectorCache = newCache}, eS)
     handleSimple :: MonadIO m => Address -> SimplePoint -> Collector o s m ()
     handleSimple addr (SimplePoint _ ts payload) = do
         (CommonState{..}, _) <- get
-        liftIO $ withMarquiseHandler (\e -> warningM "Process.handleSimple" $ "Marquise error when queuing simple point: " ++ show e)
-            (queueSimple collectorSpoolFiles addr ts payload)
-
+        liftIO $ withMarquiseHandler (\e -> warningM "Process.handleSimple" $ "Marquise error when queuing simple point: " ++ show e) $ do
+            queueSimple collectorSpoolFiles addr ts payload
+            lift $ debugM "Process.handleSimple" $ concat ["Queued simple point ", show addr, ", ", show ts, ", ", show payload]
 
 parseCommonOpts :: Parser CommonOpts
 parseCommonOpts = CommonOpts
