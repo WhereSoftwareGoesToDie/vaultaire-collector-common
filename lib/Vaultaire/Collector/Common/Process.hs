@@ -20,16 +20,16 @@ import           Vaultaire.Collector.Common.Types
 runBaseCollector :: MonadIO m
                  => Producer (Address, Either SourceDict SimplePoint) (Collector () () m) ()
                  -> m ()
-runBaseCollector = runCollector () (\_ -> return ()) (return ())
+runBaseCollector = runCollector (pure ()) (\_ -> return ()) (return ())
 
 runCollector :: MonadIO m
-             => o
+             => Parser o
              -> (CollectorOpts o -> m s)
              -> Collector o s m ()
              -> CollectionStream o s m
              -> m ()
-runCollector eOpts initialiseExtraState cleanup collect = do
-    cOpts <- liftIO $ execParser (info parseCommonOpts fullDesc)
+runCollector parseExtraOpts initialiseExtraState cleanup collect = do
+    (cOpts, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
     let opts = (cOpts, eOpts)
     eState <- initialiseExtraState opts
     cState <- getInitialCommonState cOpts
