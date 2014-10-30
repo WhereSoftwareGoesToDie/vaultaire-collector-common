@@ -20,20 +20,21 @@ import           Vaultaire.Collector.Common.Types
 runBaseCollector :: MonadIO m
                  => Producer (Address, Either SourceDict SimplePoint) (Collector () () m) ()
                  -> m ()
-runBaseCollector = runCollector () (\_ -> return ())
+runBaseCollector = runCollector (pure ()) (\_ -> return ()) (return ())
 
 runCollector :: MonadIO m
-             => o
+             => Parser o
              -> (CollectorOpts o -> m s)
-             -> Producer (Address, Either SourceDict SimplePoint) (Collector o s m) ()
+             -> Collector o s m ()
+             -> CollectionStream o s m
              -> m ()
-runCollector eOpts initialiseExtraState collect = do
-    cOpts <- liftIO $ execParser (info parseCommonOpts fullDesc)
+runCollector parseExtraOpts initialiseExtraState cleanup collect = do
+    (cOpts, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
     let opts = (cOpts, eOpts)
     eState <- initialiseExtraState opts
     cState <- getInitialCommonState cOpts
     liftIO $ setupLogger (optLogLevel cOpts)
-    evalStateT (runReaderT (unCollector $ act collect) opts) (cState, eState)
+    evalStateT (runReaderT (unCollector $ act collect >> cleanup) opts) (cState, eState)
   where
     setupLogger level = do
         rLogger <- getRootLogger
@@ -79,7 +80,7 @@ parseCommonOpts = CommonOpts
          <> help "Run in verbose mode")
     <*> strOption
         (long "marquise-namespace"
-         <> short 'n'
+         <> short 'm'
          <> value "perfdata"
          <> metavar "MARQUISE-NAMESPACE"
          <> help "Marquise namespace to write to. Must be unique on a per-host basis.")
