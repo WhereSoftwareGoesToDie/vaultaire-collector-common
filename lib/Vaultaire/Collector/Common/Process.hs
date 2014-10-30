@@ -26,7 +26,7 @@ runCollector :: MonadIO m
              => o
              -> (CollectorOpts o -> m s)
              -> Collector o s m ()
-             -> Producer (Address, Either SourceDict SimplePoint) (Collector o s m) ()
+             -> CollectionStream o s m
              -> m ()
 runCollector eOpts initialiseExtraState cleanup collect = do
     cOpts <- liftIO $ execParser (info parseCommonOpts fullDesc)
