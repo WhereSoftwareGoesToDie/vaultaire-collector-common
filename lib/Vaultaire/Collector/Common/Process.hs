@@ -80,7 +80,7 @@ parseCommonOpts = CommonOpts
          <> help "Run in verbose mode")
     <*> strOption
         (long "marquise-namespace"
-         <> short 'n'
+         <> short 'm'
          <> value "perfdata"
          <> metavar "MARQUISE-NAMESPACE"
          <> help "Marquise namespace to write to. Must be unique on a per-host basis.")
