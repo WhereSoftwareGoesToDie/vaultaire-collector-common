@@ -8,7 +8,6 @@ module Vaultaire.Collector.Common.Types where
 import           Control.Applicative
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Pipes
 import           System.Log.Logger
 
 import           Marquise.Client
@@ -27,8 +26,6 @@ data CommonState = CommonState
 type CollectorOpts o = (CommonOpts, o)
 
 type CollectorState s = (CommonState, s)
-
-type CollectionStream o s m = Producer (Address, Either SourceDict SimplePoint) (Collector o s m) ()
 
 newtype Collector o s m a = Collector {
     unCollector :: ReaderT (CollectorOpts o) (StateT (CollectorState s) m) a
