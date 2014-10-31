@@ -14,7 +14,7 @@ maintainer:          engineering@anchor.com.au
 -- category:            
 build-type:          Simple
 -- extra-source-files:  
-cabal-version:       >=1.20
+cabal-version:       >=1.18
 
 library
   exposed-modules:     Vaultaire.Collector.Common.Process
