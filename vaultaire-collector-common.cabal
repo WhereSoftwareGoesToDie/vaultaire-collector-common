@@ -2,7 +2,7 @@
 -- further documentation, see http://haskell.org/cabal/users-guide/
 
 name:                vaultaire-collector-common
-version:             0.0.2
+version:             0.1.0
 synopsis:            Common base for Haskell vaultaire collectors
 -- description:         
 homepage:            https://github.com/anchor/vaultaire-collector-common
@@ -14,7 +14,7 @@ maintainer:          engineering@anchor.com.au
 -- category:            
 build-type:          Simple
 -- extra-source-files:  
-cabal-version:       >=1.20
+cabal-version:       >=1.18
 
 library
   exposed-modules:     Vaultaire.Collector.Common.Process

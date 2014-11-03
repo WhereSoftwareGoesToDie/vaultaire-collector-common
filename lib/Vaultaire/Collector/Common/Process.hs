@@ -9,7 +9,6 @@ import           Control.Monad
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Options.Applicative
-import           Pipes
 import           System.Log.Logger
 
 import           Marquise.Client
@@ -18,7 +17,7 @@ import           Vaultaire.Types
 import           Vaultaire.Collector.Common.Types
 
 runBaseCollector :: MonadIO m
-                 => Producer (Address, Either SourceDict SimplePoint) (Collector () () m) ()
+                 => Collector () () m ()
                  -> m ()
 runBaseCollector = runCollector (pure ()) (\_ -> return ()) (return ())
 
@@ -26,7 +25,7 @@ runCollector :: MonadIO m
              => Parser o
              -> (CollectorOpts o -> m s)
              -> Collector o s m ()
-             -> CollectionStream o s m
+             -> Collector o s m ()
              -> m ()
 runCollector parseExtraOpts initialiseExtraState cleanup collect = do
     (cOpts, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
@@ -34,7 +33,7 @@ runCollector parseExtraOpts initialiseExtraState cleanup collect = do
     eState <- initialiseExtraState opts
     cState <- getInitialCommonState cOpts
     liftIO $ setupLogger (optLogLevel cOpts)
-    evalStateT (runReaderT (unCollector $ act collect >> cleanup) opts) (cState, eState)
+    evalStateT (runReaderT (unCollector $ collect >> cleanup) opts) (cState, eState)
   where
     setupLogger level = do
         rLogger <- getRootLogger
@@ -44,33 +43,25 @@ runCollector parseExtraOpts initialiseExtraState cleanup collect = do
         files <- liftIO $ withMarquiseHandler (\e -> error $ "Error creating spool files: " ++ show e) $
             createSpoolFiles optNamespace
         return $ CommonState files emptySourceCache
-    act :: MonadIO m => Producer (Address, Either SourceDict SimplePoint) (Collector o s m) () -> Collector o s m ()
-    act prod = do
-        result <- next prod
-        case result of
-            Left _ -> return ()
-            Right ((addr, item), prod') -> do
-                case item of
-                    Left sd -> handleSource addr sd
-                    Right p -> handleSimple addr p
-                act prod'
-    handleSource :: MonadIO m => Address -> SourceDict -> Collector o s m ()
-    handleSource addr sd = do
-        (cS@CommonState{..}, eS) <- get
-        let hash = hashSource sd
-        let cache = collectorCache
-        unless (memberSourceCache hash cache) $ do
-            let newCache = insertSourceCache hash collectorCache
-            liftIO $ withMarquiseHandler (\e -> warningM "Process.handleSource" $  "Marquise error when queuing sd update: " ++ show e) $ do
-                queueSourceDictUpdate collectorSpoolFiles addr sd
-                lift $ debugM "Process.handleSource" $ concat ["Queued sd ", show sd, " to addr ", show addr]
-            put (cS{collectorCache = newCache}, eS)
-    handleSimple :: MonadIO m => Address -> SimplePoint -> Collector o s m ()
-    handleSimple addr (SimplePoint _ ts payload) = do
-        (CommonState{..}, _) <- get
-        liftIO $ withMarquiseHandler (\e -> warningM "Process.handleSimple" $ "Marquise error when queuing simple point: " ++ show e) $ do
-            queueSimple collectorSpoolFiles addr ts payload
-            lift $ debugM "Process.handleSimple" $ concat ["Queued simple point ", show addr, ", ", show ts, ", ", show payload]
+
+collectSource :: MonadIO m => Address -> SourceDict -> Collector o s m ()
+collectSource addr sd = do
+    (cS@CommonState{..}, eS) <- get
+    let hash = hashSource sd
+    let cache = collectorCache
+    unless (memberSourceCache hash cache) $ do
+        let newCache = insertSourceCache hash collectorCache
+        liftIO $ withMarquiseHandler (\e -> warningM "Process.handleSource" $  "Marquise error when queuing sd update: " ++ show e) $ do
+            queueSourceDictUpdate collectorSpoolFiles addr sd
+            lift $ debugM "Process.handleSource" $ concat ["Queued sd ", show sd, " to addr ", show addr]
+        put (cS{collectorCache = newCache}, eS)
+
+collectSimple :: MonadIO m => SimplePoint -> Collector o s m ()
+collectSimple (SimplePoint addr ts payload) = do
+    (CommonState{..}, _) <- get
+    liftIO $ withMarquiseHandler (\e -> warningM "Process.handleSimple" $ "Marquise error when queuing simple point: " ++ show e) $ do
+        queueSimple collectorSpoolFiles addr ts payload
+        lift $ debugM "Process.handleSimple" $ concat ["Queued simple point ", show addr, ", ", show ts, ", ", show payload]
 
 parseCommonOpts :: Parser CommonOpts
 parseCommonOpts = CommonOpts
