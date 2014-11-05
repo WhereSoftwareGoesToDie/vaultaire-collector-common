@@ -29,10 +29,10 @@ runCollector :: MonadIO m
              -> m ()
 runCollector parseExtraOpts initialiseExtraState cleanup collect = do
     (cOpts, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
-    let opts = (cOpts, eOpts)
-    eState <- initialiseExtraState opts
-    cState <- getInitialCommonState cOpts
     liftIO $ setupLogger (optLogLevel cOpts)
+    let opts = (cOpts, eOpts)
+    cState <- getInitialCommonState cOpts
+    eState <- initialiseExtraState opts
     evalStateT (runReaderT (unCollector $ collect >> cleanup) opts) (cState, eState)
   where
     setupLogger level = do
