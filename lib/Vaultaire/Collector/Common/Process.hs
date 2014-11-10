@@ -17,24 +17,28 @@ import           Vaultaire.Types
 import           Vaultaire.Collector.Common.Types
 
 runBaseCollector :: MonadIO m
-                 => Collector () () m ()
-                 -> m ()
+                 => Collector () () m a
+                 -> m a
 runBaseCollector = runCollector (pure ()) (\_ -> return ()) (return ())
 
 runCollector :: MonadIO m
              => Parser o
              -> (CollectorOpts o -> m s)
              -> Collector o s m ()
-             -> Collector o s m ()
-             -> m ()
+             -> Collector o s m a
+             -> m a
 runCollector parseExtraOpts initialiseExtraState cleanup collect = do
     (cOpts, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
     liftIO $ setupLogger (optLogLevel cOpts)
     let opts = (cOpts, eOpts)
     cState <- getInitialCommonState cOpts
     eState <- initialiseExtraState opts
-    evalStateT (runReaderT (unCollector $ collect >> cleanup) opts) (cState, eState)
+    evalStateT (runReaderT (unCollector collect') opts) (cState, eState)
   where
+    collect' = do
+        result <- collect
+        cleanup
+        return result
     setupLogger level = do
         rLogger <- getRootLogger
         let rLogger' = setLevel level rLogger
