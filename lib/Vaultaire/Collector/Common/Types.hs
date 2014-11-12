@@ -8,19 +8,24 @@ module Vaultaire.Collector.Common.Types where
 import           Control.Applicative
 import           Control.Monad.Reader
 import           Control.Monad.State
+import           Data.Word
 import           System.Log.Logger
 
 import           Marquise.Client
 import           Vaultaire.Types
 
 data CommonOpts = CommonOpts
-  { optLogLevel  :: Priority
-  , optNamespace :: String
+  { optLogLevel        :: Priority
+  , optNamespace       :: String
+  , optRotateThreshold :: Word64
   }
 
 data CommonState = CommonState
-  { collectorSpoolFiles   :: SpoolFiles
-  , collectorCache        :: SourceDictCache
+  { collectorSpoolName   :: SpoolName
+  , collectorSpoolFiles  :: SpoolFiles
+  , collectorCache       :: SourceDictCache
+  , pointsBytesWritten   :: Word64
+  , contentsBytesWritten :: Word64
   }
 
 type CollectorOpts o = (CommonOpts, o)
