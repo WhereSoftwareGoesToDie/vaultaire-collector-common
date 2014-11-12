@@ -54,6 +54,8 @@ maybeRotatePointsFile = do
     (cS@CommonState{..}, eS) <- get
     (CommonOpts{..}, _) <- ask
     when (pointsBytesWritten > optRotateThreshold) $ do
+        liftIO $ infoM "Process.maybeRotatePointsFile"
+            "Rotating points spool file"
         newFile <- liftIO $ newRandomPointsSpoolFile collectorSpoolName
         let (SpoolFiles _ cFile) = collectorSpoolFiles
         let newSpools = SpoolFiles newFile cFile
@@ -65,6 +67,8 @@ maybeRotateContentsFile = do
     (cS@CommonState{..}, eS) <- get
     (CommonOpts{..}, _) <- ask
     when (contentsBytesWritten > optRotateThreshold) $ do
+        liftIO $ infoM "Process.maybeRotateContentsFile"
+            "Rotating contents spool file"
         newFile <- liftIO $ newRandomContentsSpoolFile collectorSpoolName
         let (SpoolFiles pFile _) = collectorSpoolFiles
         let newSpools = SpoolFiles pFile newFile
