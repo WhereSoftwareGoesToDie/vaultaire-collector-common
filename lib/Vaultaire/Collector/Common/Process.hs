@@ -31,9 +31,10 @@ runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
     (cOpts@CommonOpts{..}, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
     liftIO $ setupLogger optLogLevel
     let opts = (cOpts, eOpts)
-    cState <- getInitialCommonState cOpts
-    eState <- initialiseExtraState opts
-    result <- waitAny =<< replicateM optNumThreads (async $ evalStateT (runReaderT (unCollector collect') opts) (cState, eState))
+    result <- waitAny =<< (replicateM optNumThreads $ do
+        cState <- getInitialCommonState cOpts
+        eState <- initialiseExtraState opts
+        (async $ evalStateT (runReaderT (unCollector collect') opts) (cState, eState)))
     return $ snd result
   where
     collect' = do
