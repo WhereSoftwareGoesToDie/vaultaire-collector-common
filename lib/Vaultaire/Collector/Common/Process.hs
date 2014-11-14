@@ -108,7 +108,7 @@ parseCommonOpts = CommonOpts
          <> help "Marquise namespace to write to. Must be unique on a per-host basis.")
     <*> option auto
         (long "num-threads"
-         <> short 'v'
+         <> short 'j'
          <> value 1
          <> metavar "NUM-THREADS"
          <> help "The number of collectors to run concurrently")
