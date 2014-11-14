@@ -14,8 +14,9 @@ import           Marquise.Client
 import           Vaultaire.Types
 
 data CommonOpts = CommonOpts
-  { optLogLevel  :: Priority
-  , optNamespace :: String
+  { optLogLevel   :: Priority
+  , optNamespace  :: String
+  , optNumThreads :: Int
   }
 
 data CommonState = CommonState

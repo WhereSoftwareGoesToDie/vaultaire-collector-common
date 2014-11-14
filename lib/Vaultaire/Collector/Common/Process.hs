@@ -5,6 +5,7 @@
 
 module Vaultaire.Collector.Common.Process where
 
+import           Control.Concurrent.Async
 import           Control.Monad
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -21,6 +22,32 @@ runBaseCollector :: MonadIO m
                  -> m a
 runBaseCollector = runCollector (pure ()) (\_ -> return ()) (return ())
 
+runCollectorN :: Parser o
+              -> (CollectorOpts o -> IO s)
+              -> Collector o s IO ()
+              -> Collector o s IO a
+              -> IO a
+runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
+    (cOpts@CommonOpts{..}, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
+    liftIO $ setupLogger optLogLevel
+    let opts = (cOpts, eOpts)
+    cState <- getInitialCommonState cOpts
+    eState <- initialiseExtraState opts
+    result <- waitAny =<< replicateM optNumThreads (async $ evalStateT (runReaderT (unCollector collect') opts) (cState, eState))
+    return $ snd result
+  where
+    collect' = do
+        result <- collect
+        cleanup
+        return result
+    setupLogger level = do
+        rLogger <- getRootLogger
+        let rLogger' = setLevel level rLogger
+        saveGlobalLogger rLogger'
+    getInitialCommonState CommonOpts{..} = do
+        files <- liftIO $ withMarquiseHandler (\e -> error $ "Error creating spool files: " ++ show e) $
+            createSpoolFiles optNamespace
+        return $ CommonState files emptySourceCache
 runCollector :: MonadIO m
              => Parser o
              -> (CollectorOpts o -> m s)
@@ -79,3 +106,9 @@ parseCommonOpts = CommonOpts
          <> value "perfdata"
          <> metavar "MARQUISE-NAMESPACE"
          <> help "Marquise namespace to write to. Must be unique on a per-host basis.")
+    <*> option auto
+        (long "num-threads"
+         <> short 'v'
+         <> value 1
+         <> metavar "NUM-THREADS"
+         <> help "The number of collectors to run concurrently")
