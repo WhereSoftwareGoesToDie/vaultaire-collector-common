@@ -49,6 +49,7 @@ runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
         files <- liftIO $ withMarquiseHandler (\e -> error $ "Error creating spool files: " ++ show e) $
             createSpoolFiles optNamespace
         return $ CommonState files emptySourceCache
+
 runCollector :: MonadIO m
              => Parser o
              -> (CollectorOpts o -> m s)
