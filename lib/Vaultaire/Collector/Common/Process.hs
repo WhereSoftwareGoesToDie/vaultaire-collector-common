@@ -27,6 +27,7 @@ runBaseCollector = runCollector
                    (pure ())
                    (\_ -> return ())
                    (return ())
+
 -- | Run a Vaultaire Collector given an extra options parser, state setup
 --   function, cleanup function and collector action
 runCollector :: MonadIO m
