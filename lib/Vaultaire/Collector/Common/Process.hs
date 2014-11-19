@@ -74,7 +74,7 @@ collectSource addr sd = do
     let cache = collectorCache
     unless (memberSourceCache hash cache) $ do
         let newCache = insertSourceCache hash collectorCache
-        liftIO $ withMarquiseHandler handler
+        liftIO $ withMarquiseHandler handler $ do
             queueSourceDictUpdate collectorSpoolFiles addr sd
             lift $ debugM "Process.handleSource" $
                    concat ["Queued sd ", show sd, " to addr ", show addr]
