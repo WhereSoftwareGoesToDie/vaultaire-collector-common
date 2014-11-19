@@ -2,7 +2,7 @@
 -- further documentation, see http://haskell.org/cabal/users-guide/
 
 name:                vaultaire-collector-common
-version:             0.2.0
+version:             0.4.0
 synopsis:            Common base for Haskell vaultaire collectors
 -- description:         
 homepage:            https://github.com/anchor/vaultaire-collector-common
