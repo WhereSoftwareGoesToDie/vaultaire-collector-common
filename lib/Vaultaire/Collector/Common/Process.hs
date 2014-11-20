@@ -4,11 +4,13 @@
 module Vaultaire.Collector.Common.Process
     ( runBaseCollector
     , runCollector
+    , runCollectorN
     , runNullCollector
     , collectSource
     , collectSimple
     ) where
 
+import           Control.Concurrent.Async
 import           Control.Monad
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -54,6 +56,25 @@ runNullCollector :: MonadIO m
 runNullCollector parseExtraOpts initialiseExtraState cleanup collect = do
     (opts, st) <- setup parseExtraOpts initialiseExtraState getNullCommonState
     runCollector' opts st cleanup collect
+
+-- | Run several concurrent Vaultaire Collector with the same options
+runCollectorN :: Parser o
+              -> (CollectorOpts o -> IO s)
+              -> Collector o s IO ()
+              -> Collector o s IO a
+              -> IO a
+runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
+    (cOpts@CommonOpts{..}, eOpts) <- liftIO $
+        execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
+    liftIO $ setupLogger optLogLevel optContinueOnError
+    let opts = (cOpts, eOpts)
+    result <- waitAny =<< replicateM optNumThreads ( do
+        cState <- getInitialCommonState cOpts
+        eState <- initialiseExtraState opts
+        act <- async $ runCollector' opts (cState, eState) cleanup collect
+        link act
+        return act)
+    return $ snd result
 
 -- | Helper run function
 runCollector' :: Monad m
@@ -194,6 +215,12 @@ parseCommonOpts = CommonOpts
          <> value "perfdata"
          <> metavar "MARQUISE-NAMESPACE"
          <> help "Marquise namespace to write to. Must be unique on a per-host basis.")
+    <*> option auto
+        (long "num-threads"
+         <> short 'j'
+         <> value 1
+         <> metavar "NUM-THREADS"
+         <> help "The number of collectors to run concurrently")
     <*> option auto
         (long "max-spool-size"
          <> value (1024*1024)
