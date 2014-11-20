@@ -71,7 +71,9 @@ runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
     result <- waitAny =<< replicateM optNumThreads ( do
         cState <- getInitialCommonState cOpts
         eState <- initialiseExtraState opts
-        async $ runCollector' opts (cState, eState) cleanup collect)
+        act <- async $ runCollector' opts (cState, eState) cleanup collect
+        link act
+        return act)
     return $ snd result
 
 -- | Helper run function
