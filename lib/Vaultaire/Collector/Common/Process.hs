@@ -77,17 +77,23 @@ setup :: MonadIO m
 setup parseExtraOpts initialiseExtraState initialiseCommonState = do
     opts@(cOpts, _) <- liftIO $
         execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
-    liftIO $ setupLogger (optLogLevel cOpts)
+    liftIO $ setupLogger (optLogLevel cOpts) (optContinueOnError cOpts)
     cState <- initialiseCommonState cOpts
     eState <- initialiseExtraState opts
     return (opts, (cState, eState))
 
 -- | Sets the global logger to the given priority
-setupLogger :: Priority -> IO ()
-setupLogger level = do
+setupLogger :: Priority -> Bool -> IO ()
+setupLogger level continueOnError = do
     rLogger <- getRootLogger
-    let rLogger' = setLevel level rLogger
+    let rLogger' = maybeAddCrashHandler $ setLevel level rLogger
     saveGlobalLogger rLogger'
+  where
+    maybeAddCrashHandler logger =
+        if continueOnError then
+            logger
+        else
+            addHandler CrashLogHandler logger
 
 -- | Generates a new set of spool files and an empty SourceDictCache
 getInitialCommonState :: MonadIO m
@@ -152,3 +158,6 @@ parseCommonOpts = CommonOpts
          <> value "perfdata"
          <> metavar "MARQUISE-NAMESPACE"
          <> help "Marquise namespace to write to. Must be unique on a per-host basis.")
+    <*> switch
+        (long "continue-on-error"
+         <> help "Continue execution when logging an error or more severe message")
