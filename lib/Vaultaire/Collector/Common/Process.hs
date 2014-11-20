@@ -1,7 +1,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards       #-}
 
-module Vaultaire.Collector.Common.Process where
+module Vaultaire.Collector.Common.Process
+    ( runBaseCollector
+    , runCollector
+    , collectSource
+    , collectSimple
+    ) where
 
 import           Control.Monad
 import           Control.Monad.Reader
@@ -16,11 +21,17 @@ import           Vaultaire.Types
 
 import           Vaultaire.Collector.Common.Types
 
+-- | Run a Vaultaire Collector with no extra state or options
 runBaseCollector :: MonadIO m
                  => Collector () () m a
                  -> m a
-runBaseCollector = runCollector (pure ()) (\_ -> return ()) (return ())
+runBaseCollector = runCollector
+                   (pure ())
+                   (\_ -> return ())
+                   (return ())
 
+-- | Run a Vaultaire Collector given an extra options parser, state setup
+--   function, cleanup function and collector action
 runCollector :: MonadIO m
              => Parser o
              -> (CollectorOpts o -> m s)
@@ -28,7 +39,8 @@ runCollector :: MonadIO m
              -> Collector o s m a
              -> m a
 runCollector parseExtraOpts initialiseExtraState cleanup collect = do
-    (cOpts, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
+    (cOpts, eOpts) <- liftIO $
+        execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
     liftIO $ setupLogger (optLogLevel cOpts)
     let opts = (cOpts, eOpts)
     cState <- getInitialCommonState cOpts
@@ -39,15 +51,6 @@ runCollector parseExtraOpts initialiseExtraState cleanup collect = do
         result <- collect
         cleanup
         return result
-    setupLogger level = do
-        rLogger <- getRootLogger
-        let rLogger' = setLevel level rLogger
-        saveGlobalLogger rLogger'
-    getInitialCommonState CommonOpts{..} = do
-        files <- liftIO $ withMarquiseHandler (\e -> error $ "Error creating spool files: " ++ show e) $
-            createSpoolFiles optNamespace
-        let name = SpoolName optNamespace
-        return $ CommonState name files emptySourceCache 0 0
 
 maybeRotatePointsFile :: MonadIO m => Collector o s m ()
 maybeRotatePointsFile = do
@@ -75,6 +78,25 @@ maybeRotateContentsFile = do
         put (cS{ collectorSpoolFiles  = newSpools
                , contentsBytesWritten = 0}, eS)
 
+-- | Sets the global logger to the given priority
+setupLogger :: Priority -> IO ()
+setupLogger level = do
+    rLogger <- getRootLogger
+    let rLogger' = setLevel level rLogger
+    saveGlobalLogger rLogger'
+
+-- | Generates a new set of spool files and an empty SourceDictCache
+getInitialCommonState :: MonadIO m
+                      => CommonOpts
+                      -> m CommonState
+getInitialCommonState CommonOpts{..} = do
+    files <- liftIO $ withMarquiseHandler
+        (\e -> error $ "Error creating spool files: " ++ show e) $
+        createSpoolFiles optNamespace
+    let name = SpoolName optNamespace
+    return $ CommonState name files emptySourceCache 0 0
+
+-- | Wrapped Marquise.Client.queueSourceUpdate with logging and caching
 collectSource :: MonadIO m => Address -> SourceDict -> Collector o s m ()
 collectSource addr sd = do
     (cS@CommonState{..}, eS) <- get
@@ -90,11 +112,13 @@ collectSource addr sd = do
                 liftIO $ debugM "Process.collectSource" $
                     concat ["Queued sd ", show sd, " to addr ", show addr]
                 let newCache = insertSourceCache hash collectorCache
-                let newLen = contentsBytesWritten + 16 + fromIntegral (BS.length (toWire sd))
+                let newLen = contentsBytesWritten + 16
+                           + fromIntegral (BS.length (toWire sd))
                 put (cS{ collectorCache = newCache
                        , contentsBytesWritten = newLen}, eS)
                 maybeRotateContentsFile
 
+-- | Wrapped Marquise.Client.queueSimple with logging
 collectSimple :: MonadIO m => SimplePoint -> Collector o s m ()
 collectSimple (SimplePoint addr ts payload) = do
     (cS@CommonState{..}, eS) <- get
@@ -105,11 +129,15 @@ collectSimple (SimplePoint addr ts payload) = do
             "Marquise error when queuing simple point: " ++ show e
         Right _ -> do
             liftIO $ debugM "Process.handleSimple" $
-                concat ["Queued simple point ", show addr, ", ", show ts, ", ", show payload]
+                concat ["Queued simple point "
+                       , show addr, ", "
+                       , show ts, ", "
+                       , show payload]
             let newLen = pointsBytesWritten + 24
             put (cS{ pointsBytesWritten = newLen}, eS)
             maybeRotatePointsFile
 
+-- | Parses the common options for Vaultaire collectors
 parseCommonOpts :: Parser CommonOpts
 parseCommonOpts = CommonOpts
     <$> flag WARNING DEBUG

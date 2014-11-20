@@ -1,7 +1,5 @@
-{-# LANGUAGE
-    GeneralizedNewtypeDeriving
-  , StandaloneDeriving
-  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 
 module Vaultaire.Collector.Common.Types where
 
