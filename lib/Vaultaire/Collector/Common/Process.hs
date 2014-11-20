@@ -5,6 +5,7 @@ module Vaultaire.Collector.Common.Process
     ( runBaseCollector
     , runCollector
     , runCollectorN
+    , runNullCollector
     , collectSource
     , collectSimple
     ) where
@@ -17,6 +18,7 @@ import           Options.Applicative
 import           System.Log.Logger
 
 import           Marquise.Client
+import           Marquise.Types
 import           Vaultaire.Types
 
 import           Vaultaire.Collector.Common.Types
@@ -39,18 +41,20 @@ runCollector :: MonadIO m
              -> Collector o s m a
              -> m a
 runCollector parseExtraOpts initialiseExtraState cleanup collect = do
-    (cOpts, eOpts) <- liftIO $
-        execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
-    liftIO $ setupLogger (optLogLevel cOpts)
-    let opts = (cOpts, eOpts)
-    cState <- getInitialCommonState cOpts
-    eState <- initialiseExtraState opts
-    evalStateT (runReaderT (unCollector collect') opts) (cState, eState)
-  where
-    collect' = do
-        result <- collect
-        cleanup
-        return result
+    (opts, st) <- setup parseExtraOpts initialiseExtraState getInitialCommonState
+    runCollector' opts st cleanup collect
+
+-- | Run a Vaultaire Collector which outputs to /dev/null
+--   Suitable for testing
+runNullCollector :: MonadIO m
+                 => Parser o
+                 -> (CollectorOpts o -> m s)
+                 -> Collector o s m ()
+                 -> Collector o s m a
+                 -> m a
+runNullCollector parseExtraOpts initialiseExtraState cleanup collect = do
+    (opts, st) <- setup parseExtraOpts initialiseExtraState getNullCommonState
+    runCollector' opts st cleanup collect
 
 -- | Run several concurrent Vaultaire Collector with the same options
 runCollectorN :: Parser o
@@ -60,25 +64,54 @@ runCollectorN :: Parser o
               -> IO a
 runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
     (cOpts@CommonOpts{..}, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
-    liftIO $ setupLogger optLogLevel
+    liftIO $ setupLogger optLogLevel optContinueOnError
     let opts = (cOpts, eOpts)
-    result <- waitAny =<< (replicateM optNumThreads $ do
+    result <- waitAny =<< replicateM optNumThreads ( do
         cState <- getInitialCommonState cOpts
         eState <- initialiseExtraState opts
-        async $ evalStateT (runReaderT (unCollector collect') opts) (cState, eState))
+        async $ runCollector' opts (cState, eState) cleanup collect)
     return $ snd result
-  where
-    collect' = do
-        result <- collect
-        cleanup
-        return result
+
+-- | Helper run function
+runCollector' :: Monad m
+              => CollectorOpts o
+              -> CollectorState s
+              -> Collector o s m ()
+              -> Collector o s m a
+              -> m a
+runCollector' opts st cleanup collect =
+    let collect' = unCollector $ do
+            result <- collect
+            cleanup
+            return result
+    in evalStateT (runReaderT collect' opts) st
+
+-- | Helper function to setup initial state of the collector
+setup :: MonadIO m
+      => Parser o
+      -> (CollectorOpts o -> m s)
+      -> (CommonOpts -> m CommonState)
+      -> m (CollectorOpts o, CollectorState s)
+setup parseExtraOpts initialiseExtraState initialiseCommonState = do
+    opts@(cOpts, _) <- liftIO $
+        execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
+    liftIO $ setupLogger (optLogLevel cOpts) (optContinueOnError cOpts)
+    cState <- initialiseCommonState cOpts
+    eState <- initialiseExtraState opts
+    return (opts, (cState, eState))
 
 -- | Sets the global logger to the given priority
-setupLogger :: Priority -> IO ()
-setupLogger level = do
+setupLogger :: Priority -> Bool -> IO ()
+setupLogger level continueOnError = do
     rLogger <- getRootLogger
-    let rLogger' = setLevel level rLogger
+    let rLogger' = maybeAddCrashHandler $ setLevel level rLogger
     saveGlobalLogger rLogger'
+  where
+    maybeAddCrashHandler logger =
+        if continueOnError then
+            logger
+        else
+            addHandler CrashLogHandler logger
 
 -- | Generates a new set of spool files and an empty SourceDictCache
 getInitialCommonState :: MonadIO m
@@ -89,6 +122,13 @@ getInitialCommonState CommonOpts{..} = do
         (\e -> error $ "Error creating spool files: " ++ show e)
         (createSpoolFiles optNamespace)
     return $ CommonState files emptySourceCache
+
+-- | Generates a dummy set of spool files and an empty SourceDictCache
+getNullCommonState :: MonadIO m
+                    => CommonOpts
+                    -> m CommonState
+getNullCommonState CommonOpts{..} =
+    return $ CommonState (SpoolFiles "/dev/null" "/dev/null") emptySourceCache
 
 -- | Wrapped Marquise.Client.queueSourceUpdate with logging and caching
 collectSource :: MonadIO m => Address -> SourceDict -> Collector o s m ()
@@ -142,3 +182,6 @@ parseCommonOpts = CommonOpts
          <> value 1
          <> metavar "NUM-THREADS"
          <> help "The number of collectors to run concurrently")
+    <*> switch
+        (long "continue-on-error"
+         <> help "Continue execution when logging an error or more severe message")

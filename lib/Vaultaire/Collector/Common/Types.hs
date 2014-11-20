@@ -6,6 +6,7 @@ module Vaultaire.Collector.Common.Types where
 import           Control.Applicative
 import           Control.Monad.Reader
 import           Control.Monad.State
+import           System.Log.Handler
 import           System.Log.Logger
 
 import           Marquise.Client
@@ -15,6 +16,7 @@ data CommonOpts = CommonOpts
   { optLogLevel   :: Priority
   , optNamespace  :: String
   , optNumThreads :: Int
+  , optContinueOnError :: Bool
   }
 
 data CommonState = CommonState
@@ -34,3 +36,13 @@ deriving instance MonadIO m => MonadIO (Collector o s m)
 
 instance MonadTrans (Collector o s) where
     lift act = Collector $ lift $ lift act
+
+-- |Stub handler. All it does is explode on an error or more severe message
+data CrashLogHandler = CrashLogHandler
+
+instance LogHandler CrashLogHandler where
+    setLevel x _ = x
+    getLevel _ = ERROR
+    handle _ (p, m) _  = when (p >= ERROR) (error m)
+    emit _ _ _ = return ()
+    close _ = return ()
