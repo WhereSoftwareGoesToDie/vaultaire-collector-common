@@ -14,6 +14,7 @@ import           Control.Concurrent.Async
 import           Control.Monad
 import           Control.Monad.Reader
 import           Control.Monad.State
+import qualified Data.ByteString                  as BS
 import           Options.Applicative
 import           System.Log.Logger
 
@@ -63,7 +64,8 @@ runCollectorN :: Parser o
               -> Collector o s IO a
               -> IO a
 runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
-    (cOpts@CommonOpts{..}, eOpts) <- liftIO $ execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
+    (cOpts@CommonOpts{..}, eOpts) <- liftIO $
+        execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
     liftIO $ setupLogger optLogLevel optContinueOnError
     let opts = (cOpts, eOpts)
     result <- waitAny =<< replicateM optNumThreads ( do
@@ -100,6 +102,32 @@ setup parseExtraOpts initialiseExtraState initialiseCommonState = do
     eState <- initialiseExtraState opts
     return (opts, (cState, eState))
 
+maybeRotatePointsFile :: MonadIO m => Collector o s m ()
+maybeRotatePointsFile = do
+    (cS@CommonState{..}, eS) <- get
+    (CommonOpts{..}, _) <- ask
+    when (pointsBytesWritten > optRotateThreshold) $ do
+        liftIO $ infoM "Process.maybeRotatePointsFile"
+            "Rotating points spool file"
+        newFile <- liftIO $ newRandomPointsSpoolFile collectorSpoolName
+        let (SpoolFiles _ cFile) = collectorSpoolFiles
+        let newSpools = SpoolFiles newFile cFile
+        put (cS{ collectorSpoolFiles = newSpools
+               , pointsBytesWritten  = 0}, eS)
+
+maybeRotateContentsFile :: MonadIO m => Collector o s m ()
+maybeRotateContentsFile = do
+    (cS@CommonState{..}, eS) <- get
+    (CommonOpts{..}, _) <- ask
+    when (contentsBytesWritten > optRotateThreshold) $ do
+        liftIO $ infoM "Process.maybeRotateContentsFile"
+            "Rotating contents spool file"
+        newFile <- liftIO $ newRandomContentsSpoolFile collectorSpoolName
+        let (SpoolFiles pFile _) = collectorSpoolFiles
+        let newSpools = SpoolFiles pFile newFile
+        put (cS{ collectorSpoolFiles  = newSpools
+               , contentsBytesWritten = 0}, eS)
+
 -- | Sets the global logger to the given priority
 setupLogger :: Priority -> Bool -> IO ()
 setupLogger level continueOnError = do
@@ -119,16 +147,17 @@ getInitialCommonState :: MonadIO m
                       -> m CommonState
 getInitialCommonState CommonOpts{..} = do
     files <- liftIO $ withMarquiseHandler
-        (\e -> error $ "Error creating spool files: " ++ show e)
-        (createSpoolFiles optNamespace)
-    return $ CommonState files emptySourceCache
+        (\e -> error $ "Error creating spool files: " ++ show e) $
+        createSpoolFiles optNamespace
+    let name = SpoolName optNamespace
+    return $ CommonState name files emptySourceCache 0 0
 
 -- | Generates a dummy set of spool files and an empty SourceDictCache
 getNullCommonState :: MonadIO m
                     => CommonOpts
                     -> m CommonState
 getNullCommonState CommonOpts{..} =
-    return $ CommonState (SpoolFiles "/dev/null" "/dev/null") emptySourceCache
+    return $ CommonState (SpoolName "") (SpoolFiles "/dev/null" "/dev/null") emptySourceCache 0 0
 
 -- | Wrapped Marquise.Client.queueSourceUpdate with logging and caching
 collectSource :: MonadIO m => Address -> SourceDict -> Collector o s m ()
@@ -137,31 +166,39 @@ collectSource addr sd = do
     let hash = hashSource sd
     let cache = collectorCache
     unless (memberSourceCache hash cache) $ do
-        let newCache = insertSourceCache hash collectorCache
-        liftIO $ withMarquiseHandler handler $ do
+        res <- liftIO $ runMarquise $
             queueSourceDictUpdate collectorSpoolFiles addr sd
-            lift $ debugM "Process.handleSource" $
-                   concat ["Queued sd ", show sd, " to addr ", show addr]
-        put (cS{collectorCache = newCache}, eS)
-  where
-    handler e = warningM
-                "Process.handleSource" $
+        case res of
+            Left e  -> liftIO $ warningM "Process.collectSource" $
                 "Marquise error when queuing sd update: " ++ show e
+            Right _ -> do
+                liftIO $ debugM "Process.collectSource" $
+                    concat ["Queued sd ", show sd, " to addr ", show addr]
+                let newCache = insertSourceCache hash collectorCache
+                let newLen = contentsBytesWritten + 16
+                           + fromIntegral (BS.length (toWire sd))
+                put (cS{ collectorCache = newCache
+                       , contentsBytesWritten = newLen}, eS)
+                maybeRotateContentsFile
+
 -- | Wrapped Marquise.Client.queueSimple with logging
 collectSimple :: MonadIO m => SimplePoint -> Collector o s m ()
 collectSimple (SimplePoint addr ts payload) = do
-    (CommonState{..}, _) <- get
-    liftIO $ withMarquiseHandler handler $ do
+    (cS@CommonState{..}, eS) <- get
+    res <- liftIO $ runMarquise $
         queueSimple collectorSpoolFiles addr ts payload
-        lift $ debugM "Process.handleSimple" $
-               concat [ "Queued simple point "
-                      , show addr, ", "
-                      , show ts,   ", "
-                      , show payload]
-  where
-    handler e = warningM
-                "Process.handleSimple" $
-                "Marquise error when queuing simple point: " ++ show e
+    case res of
+        Left e -> liftIO $ warningM "Process.collectSimple" $
+            "Marquise error when queuing simple point: " ++ show e
+        Right _ -> do
+            liftIO $ debugM "Process.handleSimple" $
+                concat ["Queued simple point "
+                       , show addr, ", "
+                       , show ts, ", "
+                       , show payload]
+            let newLen = pointsBytesWritten + 24
+            put (cS{ pointsBytesWritten = newLen}, eS)
+            maybeRotatePointsFile
 
 -- | Parses the common options for Vaultaire collectors
 parseCommonOpts :: Parser CommonOpts
@@ -182,6 +219,11 @@ parseCommonOpts = CommonOpts
          <> value 1
          <> metavar "NUM-THREADS"
          <> help "The number of collectors to run concurrently")
+    <*> option auto
+        (long "max-spool-size"
+         <> value (1024*1024)
+         <> metavar "MAX-SPOOL-SIZE"
+         <> help "Maximum spool file size before rotation")
     <*> switch
         (long "continue-on-error"
          <> help "Continue execution when logging an error or more severe message")
