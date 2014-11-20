@@ -1,7 +1,5 @@
-{-# LANGUAGE
-    GeneralizedNewtypeDeriving
-  , StandaloneDeriving
-  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving         #-}
 
 module Vaultaire.Collector.Common.Types where
 
@@ -19,8 +17,8 @@ data CommonOpts = CommonOpts
   }
 
 data CommonState = CommonState
-  { collectorSpoolFiles   :: SpoolFiles
-  , collectorCache        :: SourceDictCache
+  { collectorSpoolFiles :: SpoolFiles
+  , collectorCache      :: SourceDictCache
   }
 
 type CollectorOpts o = (CommonOpts, o)
