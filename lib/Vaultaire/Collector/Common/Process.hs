@@ -109,15 +109,14 @@ runCollectorNP :: Parser o
                -> Collector o s IO ()
                -> Collector o s IO a
                -> Collector o s IO a
-               -> Int
                -> IO a
-runCollectorNP parseExtraOpts initialiseExtraState cleanup spawnManager collect numSets = do
+runCollectorNP parseExtraOpts initialiseExtraState cleanup spawnManager collect = do
     (cOpts@CommonOpts{..}, eOpts) <- liftIO $
         execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
     liftIO $ setupLogger optLogLevel optContinueOnError
     let opts = (cOpts, eOpts)
     eState <- initialiseExtraState opts
-    setAsyncs <- replicateM numSets $ async $ do
+    setAsyncs <- replicateM optNumSets $ async $ do
         managerAsync <- async $ do
             cState <- getInitialCommonState cOpts
             runCollector' opts (cState, eState) cleanup spawnManager
@@ -276,6 +275,12 @@ parseCommonOpts = CommonOpts
          <> value 1
          <> metavar "NUM-THREADS"
          <> help "The number of collectors to run concurrently")
+    <*> option auto
+        (long "num-sets"
+         <> short 'w'
+         <> value 1
+         <> metavar "NUM-SETS"
+         <> help "The number of manager-worker sets to run concurrently")
     <*> option auto
         (long "max-spool-size"
          <> value (1024*1024)
