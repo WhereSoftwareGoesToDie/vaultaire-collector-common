@@ -5,8 +5,8 @@ module Vaultaire.Collector.Common.Process
     ( runBaseCollector
     , runCollector
     , runCollectorN
-    , runCollectorP
-    , runCollectorNP
+    , runCollectorWithManager
+    , runCollectorNWithManagers
     , runNullCollector
     , collectSource
     , collectSimple
@@ -79,13 +79,13 @@ runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
     return $ snd result
 
 -- | Run several concurrent Vaultaire Collectors with a manager and shared extra state
-runCollectorP :: Parser o
+runCollectorWithManager :: Parser o
               -> (CollectorOpts o -> IO s)
               -> Collector o s IO ()
               -> Collector o s IO a
               -> Collector o s IO a
               -> IO a
-runCollectorP parseExtraOpts initialiseExtraState cleanup spawnManager collect = do
+runCollectorWithManager parseExtraOpts initialiseExtraState cleanup spawnManager collect = do
     (cOpts@CommonOpts{..}, eOpts) <- liftIO $
         execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
     liftIO $ setupLogger optLogLevel optContinueOnError
@@ -104,13 +104,13 @@ runCollectorP parseExtraOpts initialiseExtraState cleanup spawnManager collect =
 
 -- | Run several concurrent Vaultaire Collector (manager-worker) sets
 -- | Run several concurrent Vaultaire Collectors with a manager and shared extra state
-runCollectorNP :: Parser o
+runCollectorNWithManagers :: Parser o
                -> (CollectorOpts o -> IO s)
                -> Collector o s IO ()
                -> Collector o s IO a
                -> Collector o s IO a
                -> IO a
-runCollectorNP parseExtraOpts initialiseExtraState cleanup spawnManager collect = do
+runCollectorNWithManagers parseExtraOpts initialiseExtraState cleanup spawnManager collect = do
     (cOpts@CommonOpts{..}, eOpts) <- liftIO $
         execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
     liftIO $ setupLogger optLogLevel optContinueOnError
