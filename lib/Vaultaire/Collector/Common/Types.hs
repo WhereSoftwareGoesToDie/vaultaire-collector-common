@@ -17,6 +17,7 @@ data CommonOpts = CommonOpts
   { optLogLevel   :: Priority
   , optNamespace  :: String
   , optNumThreads :: Int
+  , optNumSets    :: Int
   , optRotateThreshold :: Word64
   , optContinueOnError :: Bool
   }

@@ -5,6 +5,8 @@ module Vaultaire.Collector.Common.Process
     ( runBaseCollector
     , runCollector
     , runCollectorN
+    , runCollectorWithManager
+    , runCollectorNWithManagers
     , runNullCollector
     , collectSource
     , collectSimple
@@ -57,7 +59,7 @@ runNullCollector parseExtraOpts initialiseExtraState cleanup collect = do
     (opts, st) <- setup parseExtraOpts initialiseExtraState getNullCommonState
     runCollector' opts st cleanup collect
 
--- | Run several concurrent Vaultaire Collector with the same options
+-- | Run several concurrent Vaultaire Collectors with the same options
 runCollectorN :: Parser o
               -> (CollectorOpts o -> IO s)
               -> Collector o s IO ()
@@ -74,6 +76,58 @@ runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
         act <- async $ runCollector' opts (cState, eState) cleanup collect
         link act
         return act)
+    return $ snd result
+
+-- | Run several concurrent Vaultaire Collectors with a manager and shared extra state
+runCollectorWithManager :: Parser o
+              -> (CollectorOpts o -> IO s)
+              -> Collector o s IO ()
+              -> Collector o s IO a
+              -> Collector o s IO a
+              -> IO a
+runCollectorWithManager parseExtraOpts initialiseExtraState cleanup spawnManager collect = do
+    (cOpts@CommonOpts{..}, eOpts) <- liftIO $
+        execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
+    liftIO $ setupLogger optLogLevel optContinueOnError
+    let opts = (cOpts, eOpts)
+    eState <- initialiseExtraState opts
+    managerAsync <- async $ do
+        cState <- getInitialCommonState cOpts
+        runCollector' opts (cState, eState) cleanup spawnManager
+    workerAsyncs <- replicateM optNumThreads ( do
+        cState <- getInitialCommonState cOpts
+        act <- async $ runCollector' opts (cState, eState) cleanup collect
+        link act
+        return act)
+    result <- waitAny (managerAsync:workerAsyncs)
+    return $ snd result
+
+-- | Run several concurrent Vaultaire Collector (manager-worker) sets
+-- | Run several concurrent Vaultaire Collectors with a manager and shared extra state
+runCollectorNWithManagers :: Parser o
+               -> (CollectorOpts o -> IO s)
+               -> Collector o s IO ()
+               -> Collector o s IO a
+               -> Collector o s IO a
+               -> IO a
+runCollectorNWithManagers parseExtraOpts initialiseExtraState cleanup spawnManager collect = do
+    (cOpts@CommonOpts{..}, eOpts) <- liftIO $
+        execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
+    liftIO $ setupLogger optLogLevel optContinueOnError
+    let opts = (cOpts, eOpts)
+    eState <- initialiseExtraState opts
+    setAsyncs <- replicateM optNumSets $ async $ do
+        managerAsync <- async $ do
+            cState <- getInitialCommonState cOpts
+            runCollector' opts (cState, eState) cleanup spawnManager
+        workerAsyncs <- replicateM optNumThreads ( do
+            cState <- getInitialCommonState cOpts
+            act <- async $ runCollector' opts (cState, eState) cleanup collect
+            link act
+            return act)
+        result <- waitAny (managerAsync:workerAsyncs)
+        return $ snd result
+    result <- waitAny setAsyncs
     return $ snd result
 
 -- | Helper run function
@@ -221,6 +275,12 @@ parseCommonOpts = CommonOpts
          <> value 1
          <> metavar "NUM-THREADS"
          <> help "The number of collectors to run concurrently")
+    <*> option auto
+        (long "num-sets"
+         <> short 'w'
+         <> value 1
+         <> metavar "NUM-SETS"
+         <> help "The number of manager-worker sets to run concurrently")
     <*> option auto
         (long "max-spool-size"
          <> value (1024*1024)
