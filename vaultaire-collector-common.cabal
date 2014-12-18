@@ -2,7 +2,7 @@
 -- further documentation, see http://haskell.org/cabal/users-guide/
 
 name:                vaultaire-collector-common
-version:             0.3.0
+version:             0.4.0
 synopsis:            Common base for Haskell vaultaire collectors
 -- description:         
 homepage:            https://github.com/anchor/vaultaire-collector-common
@@ -30,7 +30,8 @@ library
                        text,
                        optparse-applicative >= 0.11.0,
                        pipes,
-                       async
+                       async,
+                       exceptions
 
   hs-source-dirs:      lib
   default-language:    Haskell2010

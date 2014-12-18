@@ -12,6 +12,7 @@ module Vaultaire.Collector.Common.Process
 
 import           Control.Concurrent.Async
 import           Control.Monad
+import           Control.Monad.Catch
 import           Control.Monad.Reader
 import           Control.Monad.State
 import qualified Data.ByteString                  as BS
@@ -25,7 +26,7 @@ import           Vaultaire.Types
 import           Vaultaire.Collector.Common.Types
 
 -- | Run a Vaultaire Collector with no extra state or options
-runBaseCollector :: MonadIO m
+runBaseCollector :: (MonadCatch m, MonadIO m)
                  => Collector () () m a
                  -> m a
 runBaseCollector = runCollector
@@ -35,7 +36,7 @@ runBaseCollector = runCollector
 
 -- | Run a Vaultaire Collector given an extra options parser, state setup
 --   function, cleanup function and collector action
-runCollector :: MonadIO m
+runCollector :: (MonadCatch m, MonadIO m)
              => Parser o
              -> (CollectorOpts o -> m s)
              -> Collector o s m ()
@@ -47,7 +48,7 @@ runCollector parseExtraOpts initialiseExtraState cleanup collect = do
 
 -- | Run a Vaultaire Collector which outputs to /dev/null
 --   Suitable for testing
-runNullCollector :: MonadIO m
+runNullCollector :: (MonadCatch m, MonadIO m)
                  => Parser o
                  -> (CollectorOpts o -> m s)
                  -> Collector o s m ()
@@ -77,18 +78,22 @@ runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
     return $ snd result
 
 -- | Helper run function
-runCollector' :: Monad m
+runCollector' :: MonadCatch m
               => CollectorOpts o
               -> CollectorState s
               -> Collector o s m ()
               -> Collector o s m a
               -> m a
 runCollector' opts st cleanup collect =
-    let collect' = unCollector $ do
+    let collect' = unCollector $ flip catch handler $ do
             result <- collect
             cleanup
             return result
     in evalStateT (runReaderT collect' opts) st
+  where
+    handler e = do
+        cleanup
+        error (show (e :: SomeException))
 
 -- | Helper function to setup initial state of the collector
 setup :: MonadIO m

@@ -4,6 +4,7 @@
 module Vaultaire.Collector.Common.Types where
 
 import           Control.Applicative
+import           Control.Monad.Catch
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Word
@@ -35,12 +36,12 @@ type CollectorState s = (CommonState, s)
 
 newtype Collector o s m a = Collector {
     unCollector :: ReaderT (CollectorOpts o) (StateT (CollectorState s) m) a
-} deriving (Functor, Applicative, Monad, MonadReader (CollectorOpts o), MonadState (CollectorState s))
-
-deriving instance MonadIO m => MonadIO (Collector o s m)
+} deriving (Functor, Applicative, Monad, MonadReader (CollectorOpts o), MonadState (CollectorState s), MonadThrow, MonadCatch)
 
 instance MonadTrans (Collector o s) where
     lift act = Collector $ lift $ lift act
+
+deriving instance MonadIO m => MonadIO (Collector o s m)
 
 -- |Stub handler. All it does is explode on an error or more severe message
 data CrashLogHandler = CrashLogHandler
