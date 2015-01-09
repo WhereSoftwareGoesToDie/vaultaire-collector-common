@@ -42,7 +42,8 @@ deriving instance MonadIO m => MonadIO (Collector o s m)
 instance MonadTrans (Collector o s) where
     lift act = Collector $ lift $ lift act
 
--- |Stub handler. All it does is explode on an error or more severe message
+-- | Nervous log handler. Terminates calling process if used to handle a
+--   log message of `ERROR` or greater severity.
 data CrashLogHandler = CrashLogHandler
 
 instance LogHandler CrashLogHandler where

@@ -130,7 +130,8 @@ maybeRotateContentsFile = do
         put (cS{ collectorSpoolFiles  = newSpools
                , contentsBytesWritten = 0}, eS)
 
--- | Sets the global logger to the given priority
+-- | Sets the global logger to the given priority, and specify whether
+--   we want to halt and catch fire on any error.
 setupLogger :: Priority -> Bool -> IO ()
 setupLogger level continueOnError = do
     rLogger <- getRootLogger
