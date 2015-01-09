@@ -24,7 +24,7 @@ import           Vaultaire.Types
 
 import           Vaultaire.Collector.Common.Types
 
--- | Run a Vaultaire Collector with no extra state or options
+-- | Run a Vaultaire Collector with no extra state or options.
 runBaseCollector :: MonadIO m
                  => Collector () () m a
                  -> m a
@@ -34,7 +34,7 @@ runBaseCollector = runCollector
                    (return ())
 
 -- | Run a Vaultaire Collector given an extra options parser, state setup
---   function, cleanup function and collector action
+--   function, cleanup function and collector action.
 runCollector :: MonadIO m
              => Parser o
              -> (CollectorOpts o -> m s)
@@ -46,7 +46,7 @@ runCollector parseExtraOpts initialiseExtraState cleanup collect = do
     runCollector' opts st cleanup collect
 
 -- | Run a Vaultaire Collector which outputs to /dev/null
---   Suitable for testing
+--   Suitable for testing.
 runNullCollector :: MonadIO m
                  => Parser o
                  -> (CollectorOpts o -> m s)
@@ -57,7 +57,7 @@ runNullCollector parseExtraOpts initialiseExtraState cleanup collect = do
     (opts, st) <- setup parseExtraOpts initialiseExtraState getNullCommonState
     runCollector' opts st cleanup collect
 
--- | Run several concurrent Vaultaire Collector with the same options
+-- | Run several concurrent Vaultaire Collector with the same options.
 runCollectorN :: Parser o
               -> (CollectorOpts o -> IO s)
               -> Collector o s IO ()
@@ -76,7 +76,7 @@ runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
         return act)
     return $ snd result
 
--- | Helper run function
+-- | Helper run function.
 runCollector' :: Monad m
               => CollectorOpts o
               -> CollectorState s
@@ -90,7 +90,7 @@ runCollector' opts st cleanup collect =
             return result
     in evalStateT (runReaderT collect' opts) st
 
--- | Helper function to setup initial state of the collector
+-- | Helper function to setup initial state of the collector.
 setup :: MonadIO m
       => Parser o
       -> (CollectorOpts o -> m s)
@@ -144,7 +144,7 @@ setupLogger level continueOnError = do
         else
             addHandler CrashLogHandler logger
 
--- | Generates a new set of spool files and an empty SourceDictCache
+-- | Generates a new set of spool files and an empty SourceDictCache.
 getInitialCommonState :: MonadIO m
                       => CommonOpts
                       -> m CommonState
@@ -155,14 +155,14 @@ getInitialCommonState CommonOpts{..} = do
     let name = SpoolName optNamespace
     return $ CommonState name files emptySourceCache 0 0
 
--- | Generates a dummy set of spool files and an empty SourceDictCache
+-- | Generates a dummy set of spool files and an empty SourceDictCache.
 getNullCommonState :: MonadIO m
                     => CommonOpts
                     -> m CommonState
 getNullCommonState CommonOpts{..} =
     return $ CommonState (SpoolName "") (SpoolFiles "/dev/null" "/dev/null") emptySourceCache 0 0
 
--- | Wrapped Marquise.Client.queueSourceUpdate with logging and caching
+-- | Wrapped Marquise.Client.queueSourceUpdate with logging and caching.
 collectSource :: MonadIO m => Address -> SourceDict -> Collector o s m ()
 collectSource addr sd = do
     (cS@CommonState{..}, eS) <- get
@@ -184,7 +184,7 @@ collectSource addr sd = do
                        , contentsBytesWritten = newLen}, eS)
                 maybeRotateContentsFile
 
--- | Wrapped Marquise.Client.queueSimple with logging
+-- | Wrapped Marquise.Client.queueSimple with logging.
 collectSimple :: MonadIO m => SimplePoint -> Collector o s m ()
 collectSimple (SimplePoint addr ts payload) = do
     (cS@CommonState{..}, eS) <- get
@@ -203,7 +203,7 @@ collectSimple (SimplePoint addr ts payload) = do
             put (cS{ pointsBytesWritten = newLen}, eS)
             maybeRotatePointsFile
 
--- | Parses the common options for Vaultaire collectors
+-- | Parses the common options for Vaultaire collectors.
 parseCommonOpts :: Parser CommonOpts
 parseCommonOpts = CommonOpts
     <$> flag WARNING DEBUG
