@@ -14,9 +14,9 @@ import           Marquise.Client
 import           Vaultaire.Types
 
 data CommonOpts = CommonOpts
-  { optLogLevel   :: Priority
-  , optNamespace  :: String
-  , optNumThreads :: Int
+  { optLogLevel        :: Priority
+  , optNamespace       :: String
+  , optNumThreads      :: Int
   , optRotateThreshold :: Word64
   , optContinueOnError :: Bool
   }
