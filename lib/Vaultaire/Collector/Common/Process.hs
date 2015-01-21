@@ -220,6 +220,12 @@ collectExtended (ExtendedPoint addr ts payload) = do
                        , show ts, ", "
                        , show payload]
             let payloadLen = fromIntegral $ BS.length payload
+            -- An ExtendedPoint has 4 components:
+            -- Address:   8 bytes
+            -- Timestamp: 8 bytes
+            -- PayloadLength: 8 bytes
+            -- Payload: PayloadLength bytes
+            -- For a total length of 24 + PayloadLength bytes
             let newLen = pointsBytesWritten + 24 + payloadLen
             put (cS{ pointsBytesWritten = newLen}, eS)
             maybeRotatePointsFile
