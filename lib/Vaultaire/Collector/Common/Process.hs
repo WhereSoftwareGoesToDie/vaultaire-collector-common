@@ -8,6 +8,7 @@ module Vaultaire.Collector.Common.Process
     , runNullCollector
     , collectSource
     , collectSimple
+    , collectExtended
     ) where
 
 import           Control.Concurrent.Async
@@ -194,7 +195,7 @@ collectSimple (SimplePoint addr ts payload) = do
         Left e -> liftIO $ warningM "Process.collectSimple" $
             "Marquise error when queuing simple point: " ++ show e
         Right _ -> do
-            liftIO $ debugM "Process.handleSimple" $
+            liftIO $ debugM "Process.collectSimple" $
                 concat ["Queued simple point "
                        , show addr, ", "
                        , show ts, ", "
@@ -203,7 +204,27 @@ collectSimple (SimplePoint addr ts payload) = do
             put (cS{ pointsBytesWritten = newLen}, eS)
             maybeRotatePointsFile
 
--- | Parses the common options for Vaultaire collectors.
+-- | Wrapped Marquise.Client.queueExtended with logging
+collectExtended :: MonadIO m => ExtendedPoint -> Collector o s m ()
+collectExtended (ExtendedPoint addr ts payload) = do
+    (cS@CommonState{..}, eS) <- get
+    res <- liftIO $ runMarquise $
+        queueExtended collectorSpoolFiles addr ts payload
+    case res of
+        Left e -> liftIO $ warningM "Process.collectExtended" $
+            "Marquise error when queuing extended point: " ++ show e
+        Right _ -> do
+            liftIO $ debugM "Process.collectExtended" $
+                concat ["Queued extended point "
+                       , show addr, ", "
+                       , show ts, ", "
+                       , show payload]
+            let payloadLen = fromIntegral $ BS.length payload
+            let newLen = pointsBytesWritten + 24 + payloadLen
+            put (cS{ pointsBytesWritten = newLen}, eS)
+            maybeRotatePointsFile
+
+-- | Parses the common options for Vaultaire collectors
 parseCommonOpts :: Parser CommonOpts
 parseCommonOpts = CommonOpts
     <$> flag WARNING DEBUG
