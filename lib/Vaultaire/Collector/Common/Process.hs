@@ -204,7 +204,7 @@ collectSimple (SimplePoint addr ts payload) = do
             put (cS{ pointsBytesWritten = newLen}, eS)
             maybeRotatePointsFile
 
--- | Wrapped Marquise.Client.queueExtended with logging
+-- | Wrapped Marquise.Client.queueExtended with logging.
 collectExtended :: MonadIO m => ExtendedPoint -> Collector o s m ()
 collectExtended (ExtendedPoint addr ts payload) = do
     (cS@CommonState{..}, eS) <- get
@@ -224,7 +224,7 @@ collectExtended (ExtendedPoint addr ts payload) = do
             put (cS{ pointsBytesWritten = newLen}, eS)
             maybeRotatePointsFile
 
--- | Parses the common options for Vaultaire collectors
+-- | Parses the common options for Vaultaire collectors.
 parseCommonOpts :: Parser CommonOpts
 parseCommonOpts = CommonOpts
     <$> flag WARNING DEBUG
