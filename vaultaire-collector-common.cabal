@@ -27,7 +27,7 @@ library
   build-depends:       base >=4.7 && <4.8,
                        mtl,
                        hslogger,
-                       marquise >= 3.2,
+                       marquise >= 3.3,
                        vaultaire-common,
                        bytestring,
                        text,
