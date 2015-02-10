@@ -47,7 +47,6 @@ runCollector parseExtraOpts initialiseExtraState cleanup collect = do
     (opts, st) <- setup parseExtraOpts initialiseExtraState getInitialCommonState
     liftM fst $ runCollector' opts st cleanup collect
 
-
 -- | Run a Vaultaire Collector which outputs to /dev/null
 --   Suitable for testing.
 runNullCollector :: MonadIO m
