@@ -4,6 +4,7 @@
 module Vaultaire.Collector.Common.Process
     ( runBaseCollector
     , runCollector
+    , runCollector'
     , runCollectorN
     , runNullCollector
     , collectSource
@@ -44,7 +45,7 @@ runCollector :: MonadIO m
              -> m a
 runCollector parseExtraOpts initialiseExtraState cleanup collect = do
     (opts, st) <- setup parseExtraOpts initialiseExtraState getInitialCommonState
-    runCollector' opts st cleanup collect
+    liftM fst $ runCollector' opts st cleanup collect
 
 -- | Run a Vaultaire Collector which outputs to /dev/null
 --   Suitable for testing.
@@ -56,7 +57,7 @@ runNullCollector :: MonadIO m
                  -> m a
 runNullCollector parseExtraOpts initialiseExtraState cleanup collect = do
     (opts, st) <- setup parseExtraOpts initialiseExtraState getNullCommonState
-    runCollector' opts st cleanup collect
+    liftM fst $ runCollector' opts st cleanup collect
 
 -- | Run several concurrent Vaultaire Collector with the same options.
 runCollectorN :: Parser o
@@ -75,21 +76,23 @@ runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
         act <- async $ runCollector' opts (cState, eState) cleanup collect
         link act
         return act)
-    return $ snd result
+    return $ fst $ snd result
 
--- | Helper run function.
+-- | Runs a collector directly from options and state rather than through
+--   an options parser and state initialisation function. Also returns
+--   the final state of the collector
 runCollector' :: Monad m
               => CollectorOpts o
               -> CollectorState s
               -> Collector o s m ()
               -> Collector o s m a
-              -> m a
+              -> m (a, CollectorState s)
 runCollector' opts st cleanup collect =
     let collect' = unCollector $ do
             result <- collect
             cleanup
             return result
-    in evalStateT (runReaderT collect' opts) st
+    in runStateT (runReaderT collect' opts) st
 
 -- | Helper function to setup initial state of the collector.
 setup :: MonadIO m
