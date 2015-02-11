@@ -7,6 +7,8 @@ module Vaultaire.Collector.Common.Process
     , runCollector'
     , runCollectorN
     , runNullCollector
+    , getInitialCommonState
+    , getNullCommonState
     , collectSource
     , collectSimple
     , collectExtended
@@ -48,16 +50,18 @@ runCollector parseExtraOpts initialiseExtraState cleanup collect = do
     liftM fst $ runCollector' opts st cleanup collect
 
 -- | Run a Vaultaire Collector which outputs to /dev/null
+--   Does no options parsing and requires a fully evalutated set of options
 --   Suitable for testing.
 runNullCollector :: MonadIO m
-                 => Parser o
+                 => CollectorOpts o
                  -> (CollectorOpts o -> m s)
                  -> Collector o s m ()
                  -> Collector o s m a
                  -> m a
-runNullCollector parseExtraOpts initialiseExtraState cleanup collect = do
-    (opts, st) <- setup parseExtraOpts initialiseExtraState getNullCommonState
-    liftM fst $ runCollector' opts st cleanup collect
+runNullCollector opts@(cOpts, _) initialiseExtraState cleanup collect = do
+    cState <- getNullCommonState cOpts
+    eState <- initialiseExtraState opts
+    liftM fst $ runCollector' opts (cState, eState) cleanup collect
 
 -- | Run several concurrent Vaultaire Collector with the same options.
 runCollectorN :: Parser o
