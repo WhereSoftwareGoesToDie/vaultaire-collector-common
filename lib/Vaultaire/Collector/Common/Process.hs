@@ -15,6 +15,7 @@ module Vaultaire.Collector.Common.Process
     ) where
 
 import           Control.Concurrent.Async
+import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Reader
 import           Control.Monad.State
@@ -157,8 +158,8 @@ getInitialCommonState :: MonadIO m
                       => CommonOpts
                       -> m CommonState
 getInitialCommonState CommonOpts{..} = do
-    files <- liftIO $ withMarquiseHandler
-        (\e -> error $ "Error creating spool files: " ++ show e) $
+    files <- liftIO $ handle
+        (\(MarquiseException e) -> error $ "Error creating spool files: " ++ e) $
         createSpoolFiles optNamespace
     let name = SpoolName optNamespace
     return $ CommonState name files emptySourceCache 0 0
@@ -177,11 +178,11 @@ collectSource addr sd = do
     let hash = hashSource sd
     let cache = collectorCache
     unless (memberSourceCache hash cache) $ do
-        res <- liftIO $ runMarquise $
+        res <- liftIO $ try $
             queueSourceDictUpdate collectorSpoolFiles addr sd
         case res of
-            Left e  -> liftIO $ warningM "Process.collectSource" $
-                "Marquise error when queuing sd update: " ++ show e
+            Left (MarquiseException e) -> liftIO . errorM "Process.collectSource" $
+                "Marquise error when queuing sd update: " ++ e
             Right _ -> do
                 liftIO $ debugM "Process.collectSource" $
                     concat ["Queued sd ", show sd, " to addr ", show addr]
@@ -196,11 +197,11 @@ collectSource addr sd = do
 collectSimple :: MonadIO m => SimplePoint -> Collector o s m ()
 collectSimple (SimplePoint addr ts payload) = do
     (cS@CommonState{..}, eS) <- get
-    res <- liftIO $ runMarquise $
+    res <- liftIO $ try $
         queueSimple collectorSpoolFiles addr ts payload
     case res of
-        Left e -> liftIO $ warningM "Process.collectSimple" $
-            "Marquise error when queuing simple point: " ++ show e
+        Left (MarquiseException e) -> liftIO . errorM "Process.collectSimple" $
+            "Marquise error when queuing simple point: " ++ e
         Right _ -> do
             liftIO $ debugM "Process.collectSimple" $
                 concat ["Queued simple point "
@@ -215,13 +216,13 @@ collectSimple (SimplePoint addr ts payload) = do
 collectExtended :: MonadIO m => ExtendedPoint -> Collector o s m ()
 collectExtended (ExtendedPoint addr ts payload) = do
     (cS@CommonState{..}, eS) <- get
-    res <- liftIO $ runMarquise $
+    res <- liftIO $ try $
         queueExtended collectorSpoolFiles addr ts payload
     case res of
-        Left e -> liftIO $ warningM "Process.collectExtended" $
-            "Marquise error when queuing extended point: " ++ show e
+        Left (MarquiseException e) -> liftIO . errorM "Process.collectExtended" $
+            "Marquise error when queuing extended point: " ++ e
         Right _ -> do
-            liftIO $ debugM "Process.collectExtended" $
+            liftIO . debugM "Process.collectExtended" $
                 concat ["Queued extended point "
                        , show addr, ", "
                        , show ts, ", "
