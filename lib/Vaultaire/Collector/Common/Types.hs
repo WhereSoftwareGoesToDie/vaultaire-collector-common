@@ -4,6 +4,7 @@
 module Vaultaire.Collector.Common.Types where
 
 import           Control.Applicative
+import           Control.Monad.Catch
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Word
@@ -38,6 +39,10 @@ newtype Collector o s m a = Collector {
 } deriving (Functor, Applicative, Monad, MonadReader (CollectorOpts o), MonadState (CollectorState s))
 
 deriving instance MonadIO m => MonadIO (Collector o s m)
+
+deriving instance MonadThrow m => MonadThrow (Collector o s m)
+deriving instance MonadCatch m => MonadCatch (Collector o s m)
+deriving instance MonadMask m  => MonadMask  (Collector o s m)
 
 instance MonadTrans (Collector o s) where
     lift act = Collector $ lift $ lift act
