@@ -2,7 +2,7 @@
 -- further documentation, see http://haskell.org/cabal/users-guide/
 
 name:                vaultaire-collector-common
-version:             0.6.2
+version:             0.6.3
 synopsis:            Common base for Haskell vaultaire collectors
 description:         Provides a framework for easily writing data to the vault
                      via spool files. Includes automatic spool file rotation,

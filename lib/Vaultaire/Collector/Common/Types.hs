@@ -1,12 +1,11 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE StandaloneDeriving         #-}
 
 module Vaultaire.Collector.Common.Types where
 
 import           Control.Applicative
 import           Control.Monad.Catch
 import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.RWS
 import           Data.Word
 import           System.Log.Handler
 import           System.Log.Logger
@@ -35,17 +34,8 @@ type CollectorOpts o = (CommonOpts, o)
 type CollectorState s = (CommonState, s)
 
 newtype Collector o s m a = Collector {
-    unCollector :: ReaderT (CollectorOpts o) (StateT (CollectorState s) m) a
-} deriving (Functor, Applicative, Monad, MonadReader (CollectorOpts o), MonadState (CollectorState s))
-
-deriving instance MonadIO m => MonadIO (Collector o s m)
-
-deriving instance MonadThrow m => MonadThrow (Collector o s m)
-deriving instance MonadCatch m => MonadCatch (Collector o s m)
-deriving instance MonadMask m  => MonadMask  (Collector o s m)
-
-instance MonadTrans (Collector o s) where
-    lift act = Collector $ lift $ lift act
+    unCollector :: RWST (CollectorOpts o) () (CollectorState s) m a
+} deriving (Functor, Applicative, Monad, MonadIO, MonadThrow, MonadCatch, MonadMask, MonadReader (CollectorOpts o), MonadState (CollectorState s), MonadTrans)
 
 -- | Nervous log handler. Terminates calling process if used to handle a
 --   log message of `ERROR` or greater severity.
