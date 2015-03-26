@@ -18,7 +18,7 @@ import           Control.Concurrent.Async
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Reader
-import           Control.Monad.State
+import           Control.Monad.RWS
 import qualified Data.ByteString                  as BS
 import           Options.Applicative
 import           System.Log.Logger
@@ -72,7 +72,7 @@ runCollectorN :: Parser o
               -> IO a
 runCollectorN parseExtraOpts initialiseExtraState cleanup collect = do
     (cOpts@CommonOpts{..}, eOpts) <- liftIO $
-        execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
+        execParser (info (liftA2 (,) (parseCommonOpts True) parseExtraOpts) fullDesc)
     liftIO $ setupLogger optLogLevel optContinueOnError
     let opts = (cOpts, eOpts)
     result <- waitAny =<< replicateM optNumThreads ( do
@@ -92,12 +92,13 @@ runCollector' :: Monad m
               -> Collector o s m ()
               -> Collector o s m a
               -> m (a, CollectorState s)
-runCollector' opts st cleanup collect =
+runCollector' opts st cleanup collect = do
     let collect' = unCollector $ do
             result <- collect
             cleanup
             return result
-    in runStateT (runReaderT collect' opts) st
+    (r, s, ()) <- runRWST collect' opts st
+    return (r, s)
 
 -- | Helper function to setup initial state of the collector.
 setup :: MonadIO m
@@ -107,7 +108,7 @@ setup :: MonadIO m
       -> m (CollectorOpts o, CollectorState s)
 setup parseExtraOpts initialiseExtraState initialiseCommonState = do
     opts@(cOpts, _) <- liftIO $
-        execParser (info (liftA2 (,) parseCommonOpts parseExtraOpts) fullDesc)
+        execParser (info (liftA2 (,) (parseCommonOpts False) parseExtraOpts) fullDesc)
     liftIO $ setupLogger (optLogLevel cOpts) (optContinueOnError cOpts)
     cState <- initialiseCommonState cOpts
     eState <- initialiseExtraState opts
@@ -239,8 +240,8 @@ collectExtended (ExtendedPoint addr ts payload) = do
             maybeRotatePointsFile
 
 -- | Parses the common options for Vaultaire collectors.
-parseCommonOpts :: Parser CommonOpts
-parseCommonOpts = CommonOpts
+parseCommonOpts :: Bool -> Parser CommonOpts
+parseCommonOpts supportsMultiThread = CommonOpts
     <$> flag WARNING DEBUG
         (long "verbose"
          <> short 'v'
@@ -250,12 +251,7 @@ parseCommonOpts = CommonOpts
          <> short 'm'
          <> metavar "MARQUISE-NAMESPACE"
          <> help "Marquise namespace to write to. Must be unique on a per-host basis.")
-    <*> option auto
-        (long "num-threads"
-         <> short 'j'
-         <> value 1
-         <> metavar "NUM-THREADS"
-         <> help "The number of collectors to run concurrently")
+    <*> numThreadsParser
     <*> option auto
         (long "max-spool-size"
          <> value (1024*1024)
@@ -264,3 +260,13 @@ parseCommonOpts = CommonOpts
     <*> switch
         (long "continue-on-error"
          <> help "Continue execution when logging an error or more severe message")
+  where
+    numThreadsParser
+        | supportsMultiThread =
+            option auto
+            (long "num-threads"
+             <> short 'j'
+             <> value 1
+             <> metavar "NUM-THREADS"
+             <> help "The number of collectors to run concurrently")
+        | otherwise = pure 1
